@@ -6,6 +6,25 @@ GNU Radio Out-of-Tree (OOT) module for Opus audio codec support.
 
 gr-opus provides GNU Radio blocks for encoding and decoding Opus audio. The module uses Python blocks that interface with the Opus library through Python bindings.
 
+## Why Opus Over Codec2?
+
+Codec2 is a low-bitrate speech codec released in 2010, optimized for very low bandwidth (typically 1200-3200 bps). While effective for its era, codec2 has limitations:
+
+- **Limited Audio Quality**: Designed for intelligibility over quality, resulting in robotic-sounding audio
+- **Aging Technology**: Based on older speech coding techniques
+- **Fixed Bitrates**: Limited flexibility in bitrate selection
+- **Made for HF, not VHF bands**
+
+Opus, standardized in 2012, represents a significant advancement:
+
+- **Superior Quality**: Modern hybrid codec combining CELP and MDCT techniques
+- **Adaptive Bitrate**: Supports bitrates from 6 kbps to 510 kbps with excellent quality at low rates
+- **Low Latency**: Configurable frame sizes (2.5ms to 60ms) suitable for real-time communication
+- **Robust Error Handling**: Better performance under adverse channel conditions
+- **Wide Industry Adoption**: Used in modern VoIP, streaming, and communication systems
+
+At comparable bitrates (e.g., 6-8 kbps), Opus provides noticeably better audio quality than codec2 while maintaining low latency suitable for ham radio applications.
+
 ## Features
 
 - Opus audio encoder block

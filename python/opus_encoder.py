@@ -52,8 +52,11 @@ class opus_encoder(gr.sync_block):
         # Frame size in samples (20ms frames for good quality)
         self.frame_size = int(sample_rate * 0.020)  # 20ms frames
         
-        # Buffer for accumulating samples
-        self.sample_buffer = np.array([], dtype=np.float32)
+        # Buffer for accumulating samples (use list for efficient appending)
+        self.sample_buffer = []
+        
+        # Maximum buffer size (10 seconds of audio) to prevent memory leaks
+        self.max_buffer_samples = sample_rate * channels * 10
         
         # Convert float32 samples to int16 for Opus
         self.max_int16 = 32767.0
@@ -65,16 +68,24 @@ class opus_encoder(gr.sync_block):
         in0 = input_items[0]
         out = output_items[0]
         
-        # Add new samples to buffer
-        self.sample_buffer = np.concatenate([self.sample_buffer, in0])
+        # Add new samples to buffer (efficient list append)
+        self.sample_buffer.extend(in0.tolist())
+        
+        # Prevent unbounded buffer growth (memory leak protection)
+        if len(self.sample_buffer) > self.max_buffer_samples:
+            # Keep only the most recent samples (drop oldest)
+            excess = len(self.sample_buffer) - self.max_buffer_samples
+            self.sample_buffer = self.sample_buffer[excess:]
         
         output_idx = 0
+        frame_size_samples = self.frame_size * self.channels
         
         # Process complete frames
-        while len(self.sample_buffer) >= self.frame_size * self.channels and output_idx < len(out):
-            # Extract frame
-            frame_samples = self.sample_buffer[:self.frame_size * self.channels]
-            self.sample_buffer = self.sample_buffer[self.frame_size * self.channels:]
+        while len(self.sample_buffer) >= frame_size_samples and output_idx < len(out):
+            # Extract frame (convert list slice to numpy array)
+            frame_samples = np.array(self.sample_buffer[:frame_size_samples], dtype=np.float32)
+            # Remove processed samples (efficient list slicing)
+            self.sample_buffer = self.sample_buffer[frame_size_samples:]
             
             # Reshape for multi-channel
             if self.channels > 1:
@@ -92,8 +103,8 @@ class opus_encoder(gr.sync_block):
                     out[output_idx:output_idx + len(encoded_data)] = np.frombuffer(encoded_data, dtype=np.uint8)
                     output_idx += len(encoded_data)
                 else:
-                    # Not enough space, put frame back in buffer
-                    self.sample_buffer = np.concatenate([frame_samples.flatten(), self.sample_buffer])
+                    # Not enough space, put frame back in buffer (efficient list prepend)
+                    self.sample_buffer = frame_samples.flatten().tolist() + self.sample_buffer
                     break
             except Exception as e:
                 print(f"Opus encoding error: {e}")
@@ -102,4 +113,11 @@ class opus_encoder(gr.sync_block):
         # For sync_block, we must consume all input
         # Return number of output items produced
         return output_idx
+    
+    def __del__(self):
+        """Cleanup method to release Opus encoder resources"""
+        if hasattr(self, 'encoder'):
+            # opuslib objects should be automatically cleaned up by Python,
+            # but we explicitly clear the reference
+            self.encoder = None
 

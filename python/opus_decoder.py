@@ -45,6 +45,9 @@ class opus_decoder(gr.sync_block):
         # Buffer for accumulating encoded packets
         self.packet_buffer = bytearray()
         
+        # Maximum buffer size (1MB) to prevent memory leaks
+        self.max_buffer_size = 1024 * 1024
+        
         # Convert int16 samples to float32
         self.max_int16 = 32767.0
         
@@ -58,6 +61,12 @@ class opus_decoder(gr.sync_block):
         # Add new data to buffer
         self.packet_buffer.extend(in0.tobytes())
         
+        # Prevent unbounded buffer growth (memory leak protection)
+        if len(self.packet_buffer) > self.max_buffer_size:
+            # Keep only the most recent data (drop oldest)
+            excess = len(self.packet_buffer) - self.max_buffer_size
+            del self.packet_buffer[:excess]
+        
         output_idx = 0
         
         # Decode packets
@@ -65,7 +74,8 @@ class opus_decoder(gr.sync_block):
             # Fixed packet size mode
             while len(self.packet_buffer) >= self.packet_size and output_idx < len(out):
                 packet = bytes(self.packet_buffer[:self.packet_size])
-                self.packet_buffer = self.packet_buffer[self.packet_size:]
+                # Efficiently remove processed data from buffer
+                del self.packet_buffer[:self.packet_size]
                 
                 try:
                     decoded_pcm = self.decoder.decode(packet, self.frame_size)
@@ -102,21 +112,26 @@ class opus_decoder(gr.sync_block):
             estimated_packet_size = max(40, min(400, len(self.packet_buffer) // 5))
             
             # Try packet sizes in order: estimated, then common sizes, then sequential
-            packet_size_candidates = []
+            # Use a set for O(1) lookup and limit candidates to prevent memory issues
+            packet_size_candidates = set()
             if estimated_packet_size <= len(self.packet_buffer):
-                packet_size_candidates.append(estimated_packet_size)
+                packet_size_candidates.add(estimated_packet_size)
             
             # Add common Opus packet sizes
             for size in [60, 80, 100, 120, 150, 180, 200, 250, 300, 350, 400]:
-                if size <= len(self.packet_buffer) and size not in packet_size_candidates:
-                    packet_size_candidates.append(size)
+                if size <= len(self.packet_buffer):
+                    packet_size_candidates.add(size)
             
-            # Add sequential sizes as fallback
+            # Add sequential sizes as fallback (limited to prevent excessive memory)
+            max_candidates = 50  # Reduced from 100 to save memory
             for size in range(1, min(4000, len(self.packet_buffer) + 1)):
                 if size not in packet_size_candidates:
-                    packet_size_candidates.append(size)
-                if len(packet_size_candidates) > 100:  # Limit search
+                    packet_size_candidates.add(size)
+                if len(packet_size_candidates) >= max_candidates:
                     break
+            
+            # Convert to sorted list for ordered processing
+            packet_size_candidates = sorted(packet_size_candidates)
             
             while output_idx < len(out) and len(self.packet_buffer) > 0:
                 decoded = False
@@ -150,8 +165,8 @@ class opus_decoder(gr.sync_block):
                                     out[output_idx:output_idx + samples_to_write] = float_samples_flat[:samples_to_write]
                                     output_idx += samples_to_write
                                 
-                                # Remove consumed packet from buffer
-                                self.packet_buffer = self.packet_buffer[packet_size:]
+                                # Efficiently remove consumed packet from buffer
+                                del self.packet_buffer[:packet_size]
                                 decoded = True
                                 break
                     except Exception:
@@ -165,4 +180,11 @@ class opus_decoder(gr.sync_block):
         # For sync_block, we must consume all input
         # Return number of output items produced
         return output_idx
+    
+    def __del__(self):
+        """Cleanup method to release Opus decoder resources"""
+        if hasattr(self, 'decoder'):
+            # opuslib objects should be automatically cleaned up by Python,
+            # but we explicitly clear the reference
+            self.decoder = None
 
