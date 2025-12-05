@@ -1,0 +1,9 @@
+/usr/lib/python3/dist-packages/gnuradio/gr_opus/__init__.py
+/usr/lib/python3/dist-packages/gnuradio/gr_opus/opus_decoder.py
+/usr/lib/python3/dist-packages/gnuradio/gr_opus/opus_encoder.py
+/usr/share/gnuradio/grc/blocks/gr_opus_opus_encoder.block.yml
+/usr/share/gnuradio/grc/blocks/gr_opus_opus_decoder.block.yml
+/usr/lib/python3/dist-packages/gnuradio/gr_opus/tests/__init__.py
+/usr/lib/python3/dist-packages/gnuradio/gr_opus/tests/qa_opus_decoder.py
+/usr/lib/python3/dist-packages/gnuradio/gr_opus/tests/qa_opus_encoder.py
+/usr/lib/python3/dist-packages/gnuradio/gr_opus/tests/qa_opus_roundtrip.py
