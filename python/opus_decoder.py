@@ -50,6 +50,30 @@ class opus_decoder(gr.sync_block):
         
         # Convert int16 samples to float32
         self.max_int16 = 32767.0
+    
+    def forecast(self, noutput_items, ninput_items_required):
+        """
+        Forecast how many input items are needed for noutput_items.
+        
+        For Opus decoding, input size is variable but typically:
+        - 20ms frame at 8kHz = 160 samples output -> ~40 bytes input (at 6 kbps)
+        - Average ratio: ~4:1 (output samples to input bytes)
+        - But we need complete packets, so we request enough for at least one packet
+        """
+        # Ensure we have enough input for at least one complete packet
+        # Typical Opus packet size is 40-400 bytes for 20ms frames
+        # Request enough input for complete packets
+        # Add some buffer to account for variable input size
+        min_packet_size = 40  # Minimum expected packet size
+        required = max(min_packet_size, noutput_items // 4)
+        
+        # Handle both list and int cases (GNU Radio may pass either)
+        if isinstance(ninput_items_required, list):
+            ninput_items_required[0] = required
+        else:
+            # If it's not a list, GNU Radio might be using a different mechanism
+            # For sync_blocks, forecast might not be strictly necessary
+            pass
         
     def work(self, input_items, output_items):
         """

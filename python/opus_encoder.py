@@ -60,7 +60,30 @@ class opus_encoder(gr.sync_block):
         
         # Convert float32 samples to int16 for Opus
         self.max_int16 = 32767.0
+    
+    def forecast(self, noutput_items, ninput_items_required):
+        """
+        Forecast how many input items are needed for noutput_items.
         
+        For Opus encoding, output size is variable but typically:
+        - 20ms frame at 8kHz = 160 samples input -> ~40 bytes output (at 6 kbps)
+        - Average ratio: ~4:1 (input samples to output bytes)
+        - But we need complete frames, so we request enough for at least one frame
+        """
+        # Ensure we have enough input for at least one complete frame
+        frame_size_samples = self.frame_size * self.channels
+        # Request enough input for complete frames
+        # Add some buffer to account for variable output size
+        required = max(frame_size_samples, noutput_items * 4)
+        
+        # Handle both list and int cases (GNU Radio may pass either)
+        if isinstance(ninput_items_required, list):
+            ninput_items_required[0] = required
+        else:
+            # If it's not a list, GNU Radio might be using a different mechanism
+            # For sync_blocks, forecast might not be strictly necessary
+            pass
+    
     def work(self, input_items, output_items):
         """
         Process audio samples and encode to Opus
