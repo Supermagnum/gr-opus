@@ -37,7 +37,14 @@ class opus_decoder(gr.sync_block):
         self.packet_size = packet_size
         
         # Create Opus decoder
-        self.decoder = opuslib.Decoder(sample_rate, channels)
+        # Store decoder reference to prevent garbage collection
+        try:
+            self.decoder = opuslib.Decoder(sample_rate, channels)
+            # Ensure decoder is not None
+            if self.decoder is None:
+                raise RuntimeError("Failed to create Opus decoder")
+        except Exception as e:
+            raise RuntimeError(f"Failed to initialize Opus decoder: {e}")
         
         # Frame size in samples (20ms frames)
         self.frame_size = int(sample_rate * 0.020)  # 20ms frames
@@ -50,30 +57,34 @@ class opus_decoder(gr.sync_block):
         
         # Convert int16 samples to float32
         self.max_int16 = 32767.0
+        
+        # Store reference to self to prevent garbage collection issues
+        # This helps prevent NoneType errors when GNU Radio gateway accesses the block
+        self._self_ref = self
+        
+        # Store references to critical methods to ensure they're always accessible
+        # This prevents the gateway from getting None when accessing these methods
+        self._forecast_ref = self.forecast
+        self._work_ref = self.work
+        
+        # Store instance in class-level list to prevent garbage collection
+        # This ensures the Python object stays alive even if local references are cleared
+        if not hasattr(type(self), '_instances'):
+            type(self)._instances = []
+        type(self)._instances.append(self)
+        
+        # Store all critical references in a dict to prevent GC
+        self._refs = {
+            'self': self,
+            'forecast': self.forecast,
+            'work': self.work,
+            'gateway': self.gateway,
+            'decoder': self.decoder
+        }
     
-    def forecast(self, noutput_items, ninput_items_required):
-        """
-        Forecast how many input items are needed for noutput_items.
-        
-        For Opus decoding, input size is variable but typically:
-        - 20ms frame at 8kHz = 160 samples output -> ~40 bytes input (at 6 kbps)
-        - Average ratio: ~4:1 (output samples to input bytes)
-        - But we need complete packets, so we request enough for at least one packet
-        """
-        # Ensure we have enough input for at least one complete packet
-        # Typical Opus packet size is 40-400 bytes for 20ms frames
-        # Request enough input for complete packets
-        # Add some buffer to account for variable input size
-        min_packet_size = 40  # Minimum expected packet size
-        required = max(min_packet_size, noutput_items // 4)
-        
-        # Handle both list and int cases (GNU Radio may pass either)
-        if isinstance(ninput_items_required, list):
-            ninput_items_required[0] = required
-        else:
-            # If it's not a list, GNU Radio might be using a different mechanism
-            # For sync_blocks, forecast might not be strictly necessary
-            pass
+    # Do not override forecast - sync_blocks handle forecasting internally
+    # The parent gr.sync_block.forecast method handles this automatically
+    # Overriding it causes NoneType casting errors in GNU Radio's gateway code
         
     def work(self, input_items, output_items):
         """
@@ -207,6 +218,13 @@ class opus_decoder(gr.sync_block):
     
     def __del__(self):
         """Cleanup method to release Opus decoder resources"""
+        # Remove from class instances list
+        if hasattr(type(self), '_instances'):
+            try:
+                type(self)._instances.remove(self)
+            except ValueError:
+                pass
+        
         if hasattr(self, 'decoder'):
             # opuslib objects should be automatically cleaned up by Python,
             # but we explicitly clear the reference

@@ -46,8 +46,15 @@ class opus_encoder(gr.sync_block):
         self.application = app_map.get(application.lower(), opuslib.APPLICATION_AUDIO)
         
         # Create Opus encoder
-        self.encoder = opuslib.Encoder(sample_rate, channels, self.application)
-        self.encoder.bitrate = bitrate
+        # Store encoder reference to prevent garbage collection
+        try:
+            self.encoder = opuslib.Encoder(sample_rate, channels, self.application)
+            self.encoder.bitrate = bitrate
+            # Ensure encoder is not None
+            if self.encoder is None:
+                raise RuntimeError("Failed to create Opus encoder")
+        except Exception as e:
+            raise RuntimeError(f"Failed to initialize Opus encoder: {e}")
         
         # Frame size in samples (20ms frames for good quality)
         self.frame_size = int(sample_rate * 0.020)  # 20ms frames
@@ -60,29 +67,34 @@ class opus_encoder(gr.sync_block):
         
         # Convert float32 samples to int16 for Opus
         self.max_int16 = 32767.0
+        
+        # Store reference to self to prevent garbage collection issues
+        # This helps prevent NoneType errors when GNU Radio gateway accesses the block
+        self._self_ref = self
+        
+        # Store references to critical methods to ensure they're always accessible
+        # This prevents the gateway from getting None when accessing these methods
+        self._forecast_ref = self.forecast
+        self._work_ref = self.work
+        
+        # Store instance in class-level list to prevent garbage collection
+        # This ensures the Python object stays alive even if local references are cleared
+        if not hasattr(type(self), '_instances'):
+            type(self)._instances = []
+        type(self)._instances.append(self)
+        
+        # Store all critical references in a dict to prevent GC
+        self._refs = {
+            'self': self,
+            'forecast': self.forecast,
+            'work': self.work,
+            'gateway': self.gateway,
+            'encoder': self.encoder
+        }
     
-    def forecast(self, noutput_items, ninput_items_required):
-        """
-        Forecast how many input items are needed for noutput_items.
-        
-        For Opus encoding, output size is variable but typically:
-        - 20ms frame at 8kHz = 160 samples input -> ~40 bytes output (at 6 kbps)
-        - Average ratio: ~4:1 (input samples to output bytes)
-        - But we need complete frames, so we request enough for at least one frame
-        """
-        # Ensure we have enough input for at least one complete frame
-        frame_size_samples = self.frame_size * self.channels
-        # Request enough input for complete frames
-        # Add some buffer to account for variable output size
-        required = max(frame_size_samples, noutput_items * 4)
-        
-        # Handle both list and int cases (GNU Radio may pass either)
-        if isinstance(ninput_items_required, list):
-            ninput_items_required[0] = required
-        else:
-            # If it's not a list, GNU Radio might be using a different mechanism
-            # For sync_blocks, forecast might not be strictly necessary
-            pass
+    # Do not override forecast - sync_blocks handle forecasting internally
+    # The parent gr.sync_block.forecast method handles this automatically
+    # Overriding it causes NoneType casting errors in GNU Radio's gateway code
     
     def work(self, input_items, output_items):
         """
@@ -90,6 +102,9 @@ class opus_encoder(gr.sync_block):
         """
         in0 = input_items[0]
         out = output_items[0]
+        
+        ninput = len(in0)
+        noutput = len(out)
         
         # Add new samples to buffer (efficient list append)
         self.sample_buffer.extend(in0.tolist())
@@ -102,9 +117,10 @@ class opus_encoder(gr.sync_block):
         
         output_idx = 0
         frame_size_samples = self.frame_size * self.channels
+        frames_encoded = 0
         
         # Process complete frames
-        while len(self.sample_buffer) >= frame_size_samples and output_idx < len(out):
+        while len(self.sample_buffer) >= frame_size_samples and output_idx < noutput:
             # Extract frame (convert list slice to numpy array)
             frame_samples = np.array(self.sample_buffer[:frame_size_samples], dtype=np.float32)
             # Remove processed samples (efficient list slicing)
@@ -122,16 +138,27 @@ class opus_encoder(gr.sync_block):
                 encoded_data = self.encoder.encode(int16_samples.tobytes(), self.frame_size)
                 
                 # Write encoded packet to output
-                if output_idx + len(encoded_data) <= len(out):
+                if output_idx + len(encoded_data) <= noutput:
                     out[output_idx:output_idx + len(encoded_data)] = np.frombuffer(encoded_data, dtype=np.uint8)
                     output_idx += len(encoded_data)
+                    frames_encoded += 1
                 else:
                     # Not enough space, put frame back in buffer (efficient list prepend)
                     self.sample_buffer = frame_samples.flatten().tolist() + self.sample_buffer
                     break
             except Exception as e:
                 print(f"Opus encoding error: {e}")
+                import traceback
+                traceback.print_exc()
                 break
+        
+        # Debug output (only occasionally to avoid spam)
+        if frames_encoded > 0 and not hasattr(self, '_debug_count'):
+            self._debug_count = 0
+        if frames_encoded > 0:
+            self._debug_count = getattr(self, '_debug_count', 0) + 1
+            if self._debug_count % 10 == 0:  # Print every 10th frame
+                print(f"Opus encoder: Encoded {frames_encoded} frames, produced {output_idx} bytes, buffer has {len(self.sample_buffer)} samples")
         
         # For sync_block, we must consume all input
         # Return number of output items produced
@@ -139,6 +166,13 @@ class opus_encoder(gr.sync_block):
     
     def __del__(self):
         """Cleanup method to release Opus encoder resources"""
+        # Remove from class instances list
+        if hasattr(type(self), '_instances'):
+            try:
+                type(self)._instances.remove(self)
+            except (ValueError, AttributeError):
+                pass
+        
         if hasattr(self, 'encoder'):
             # opuslib objects should be automatically cleaned up by Python,
             # but we explicitly clear the reference
