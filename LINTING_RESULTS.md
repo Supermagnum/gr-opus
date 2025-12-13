@@ -6,12 +6,12 @@ Generated: 2025-12-05
 
 | Tool | Status | Issues Found |
 |------|--------|--------------|
-| **Tests** | ⚠️ Blocked | Requires `opuslib` Python package |
-| **Bandit** | ✅ Passed | 1 false positive (Python 3 `input()`) |
-| **Flake8** | ⚠️ Style Issues | 186 issues (mostly whitespace) |
-| **Shellcheck** | ✅ Passed | No shell scripts found |
-| **Mypy** | ✅ Passed | No type issues found |
-| **Pylint** | ⚠️ Style Issues | Multiple style warnings |
+| **Tests** | Blocked | Requires `opuslib` Python package |
+| **Bandit** | Passed | 1 false positive (Python 3 `input()`) |
+| **Flake8** | Style Issues | 186 issues (mostly whitespace) |
+| **Shellcheck** | Passed | No shell scripts found |
+| **Mypy** | Passed | No type issues found |
+| **Pylint** | Style Issues | Multiple style warnings |
 
 ## Detailed Results
 
@@ -37,7 +37,7 @@ pip install opuslib
 
 ### 2. Bandit Security Analysis
 
-**Status**: ✅ **PASSED** (1 false positive)
+**Status**: **PASSED** (1 false positive)
 
 **Issues Found**: 1 high severity issue (false positive)
 
@@ -55,7 +55,7 @@ pip install opuslib
 
 ### 3. Flake8 Style Checking
 
-**Status**: ⚠️ **STYLE ISSUES FOUND**
+**Status**: **STYLE ISSUES FOUND**
 
 **Total Issues**: 186
 
@@ -77,13 +77,13 @@ pip install opuslib
 
 ### 4. Shellcheck
 
-**Status**: ✅ **PASSED**
+**Status**: **PASSED**
 
 **Result**: No shell scripts found in the codebase.
 
 ### 5. Mypy Type Checking
 
-**Status**: ✅ **PASSED**
+**Status**: **PASSED**
 
 **Result**: No type issues found in 9 source files.
 
@@ -91,7 +91,7 @@ pip install opuslib
 
 ### 6. Pylint Code Quality
 
-**Status**: ⚠️ **STYLE ISSUES FOUND**
+**Status**: **STYLE ISSUES FOUND**
 
 **Main Issues**:
 - **C0303**: Trailing whitespace (many instances)

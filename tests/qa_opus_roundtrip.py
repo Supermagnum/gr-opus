@@ -3,16 +3,17 @@
 Integration tests for Opus encoder-decoder round-trip
 """
 
-import unittest
-import numpy as np
-from gnuradio import gr, blocks
-import sys
 import os
+import sys
+import unittest
+
+import numpy as np
+from gnuradio import gr
 
 # Add parent directory to path to import gr_opus
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'python'))
-from opus_encoder import opus_encoder
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
 from opus_decoder import opus_decoder
+from opus_encoder import opus_encoder
 
 
 class qa_opus_roundtrip(unittest.TestCase):
@@ -31,36 +32,28 @@ class qa_opus_roundtrip(unittest.TestCase):
 
     def _roundtrip_encode_decode(self, input_signal, sample_rate=48000, channels=1, bitrate=64000):
         """Helper function to encode and decode a signal"""
-        encoder = opus_encoder(
-            sample_rate=sample_rate,
-            channels=channels,
-            bitrate=bitrate
-        )
-        
-        decoder = opus_decoder(
-            sample_rate=sample_rate,
-            channels=channels,
-            packet_size=0  # Auto-detect
-        )
-        
+        encoder = opus_encoder(sample_rate=sample_rate, channels=channels, bitrate=bitrate)
+
+        decoder = opus_decoder(sample_rate=sample_rate, channels=channels, packet_size=0)  # Auto-detect
+
         # Encode
         encoded_output = np.zeros(10000, dtype=np.uint8)
         produced_enc = encoder.work([input_signal], [encoded_output])
-        
+
         if produced_enc == 0:
             return None, None
-        
+
         encoded_data = encoded_output[:produced_enc]
-        
+
         # Decode
         decoded_output = np.zeros(len(input_signal) * 2, dtype=np.float32)
         produced_dec = decoder.work([encoded_data], [decoded_output])
-        
+
         if produced_dec == 0:
             return None, None
-        
+
         decoded_data = decoded_output[:produced_dec]
-        
+
         return encoded_data, decoded_data
 
     def test_001_roundtrip_sine_wave(self):
@@ -71,13 +64,13 @@ class qa_opus_roundtrip(unittest.TestCase):
         t = np.linspace(0, duration, num_samples, False)
         frequency = 440  # A4 note
         input_signal = np.sin(2 * np.pi * frequency * t, dtype=np.float32) * 0.8
-        
+
         encoded, decoded = self._roundtrip_encode_decode(input_signal)
-        
+
         self.assertIsNotNone(encoded)
         self.assertIsNotNone(decoded)
         self.assertGreater(len(decoded), 0)
-        
+
         # Check that decoded signal has similar characteristics
         # (frequency content should be preserved)
         self.assertGreater(np.max(np.abs(decoded)), 0)
@@ -89,9 +82,9 @@ class qa_opus_roundtrip(unittest.TestCase):
         num_samples = self.frame_size * num_frames
         t = np.linspace(0, num_frames * 0.020, num_samples, False)
         input_signal = np.sin(2 * np.pi * 440 * t, dtype=np.float32) * 0.8
-        
+
         encoded, decoded = self._roundtrip_encode_decode(input_signal)
-        
+
         self.assertIsNotNone(encoded)
         self.assertIsNotNone(decoded)
         self.assertGreater(len(decoded), 0)
@@ -100,17 +93,14 @@ class qa_opus_roundtrip(unittest.TestCase):
         """Test round-trip with stereo signal"""
         num_samples = self.frame_size * 2
         t = np.linspace(0, 2 * 0.020, num_samples // 2, False)
-        
+
         # Generate stereo signal
         left_channel = np.sin(2 * np.pi * 440 * t, dtype=np.float32) * 0.8
         right_channel = np.sin(2 * np.pi * 880 * t, dtype=np.float32) * 0.8
         stereo_signal = np.column_stack([left_channel, right_channel]).flatten()
-        
-        encoded, decoded = self._roundtrip_encode_decode(
-            stereo_signal,
-            channels=2
-        )
-        
+
+        encoded, decoded = self._roundtrip_encode_decode(stereo_signal, channels=2)
+
         self.assertIsNotNone(encoded)
         self.assertIsNotNone(decoded)
         self.assertGreater(len(decoded), 0)
@@ -122,12 +112,9 @@ class qa_opus_roundtrip(unittest.TestCase):
             num_samples = frame_size * 2
             t = np.linspace(0, 2 * 0.020, num_samples, False)
             input_signal = np.sin(2 * np.pi * 440 * t, dtype=np.float32) * 0.8
-            
-            encoded, decoded = self._roundtrip_encode_decode(
-                input_signal,
-                sample_rate=rate
-            )
-            
+
+            encoded, decoded = self._roundtrip_encode_decode(input_signal, sample_rate=rate)
+
             self.assertIsNotNone(encoded, f"Failed at sample rate {rate}")
             self.assertIsNotNone(decoded, f"Failed at sample rate {rate}")
             self.assertGreater(len(decoded), 0, f"Failed at sample rate {rate}")
@@ -137,9 +124,9 @@ class qa_opus_roundtrip(unittest.TestCase):
         # Need enough samples for at least one complete frame
         num_samples = self.frame_size * 3
         silence = np.zeros(num_samples, dtype=np.float32)
-        
+
         encoded, decoded = self._roundtrip_encode_decode(silence)
-        
+
         # Should handle silence gracefully
         # Encoder might not produce output immediately for silence, so allow None
         if encoded is not None:
@@ -151,9 +138,9 @@ class qa_opus_roundtrip(unittest.TestCase):
         """Test round-trip with white noise"""
         num_samples = self.frame_size * 3
         noise = np.random.randn(num_samples).astype(np.float32) * 0.3
-        
+
         encoded, decoded = self._roundtrip_encode_decode(noise)
-        
+
         self.assertIsNotNone(encoded)
         self.assertIsNotNone(decoded)
         self.assertGreater(len(decoded), 0)
@@ -163,13 +150,10 @@ class qa_opus_roundtrip(unittest.TestCase):
         num_samples = self.frame_size * 2
         t = np.linspace(0, 2 * 0.020, num_samples, False)
         input_signal = np.sin(2 * np.pi * 440 * t, dtype=np.float32) * 0.8
-        
+
         for bitrate in [32000, 64000, 128000]:
-            encoded, decoded = self._roundtrip_encode_decode(
-                input_signal,
-                bitrate=bitrate
-            )
-            
+            encoded, decoded = self._roundtrip_encode_decode(input_signal, bitrate=bitrate)
+
             self.assertIsNotNone(encoded, f"Failed at bitrate {bitrate}")
             self.assertIsNotNone(decoded, f"Failed at bitrate {bitrate}")
             self.assertGreater(len(decoded), 0, f"Failed at bitrate {bitrate}")
@@ -179,32 +163,24 @@ class qa_opus_roundtrip(unittest.TestCase):
         num_samples = self.frame_size * 2
         t = np.linspace(0, 2 * 0.020, num_samples, False)
         input_signal = np.sin(2 * np.pi * 440 * t, dtype=np.float32) * 0.8
-        
-        for app_type in ['voip', 'audio', 'lowdelay']:
-            encoder = opus_encoder(
-                sample_rate=self.sample_rate,
-                channels=self.channels,
-                application=app_type
-            )
-            decoder = opus_decoder(
-                sample_rate=self.sample_rate,
-                channels=self.channels
-            )
-            
+
+        for app_type in ["voip", "audio", "lowdelay"]:
+            encoder = opus_encoder(sample_rate=self.sample_rate, channels=self.channels, application=app_type)
+            decoder = opus_decoder(sample_rate=self.sample_rate, channels=self.channels)
+
             # Encode
             encoded_output = np.zeros(10000, dtype=np.uint8)
             produced_enc = encoder.work([input_signal], [encoded_output])
-            
+
             if produced_enc > 0:
                 encoded_data = encoded_output[:produced_enc]
-                
+
                 # Decode
                 decoded_output = np.zeros(len(input_signal) * 2, dtype=np.float32)
                 produced_dec = decoder.work([encoded_data], [decoded_output])
-                
+
                 self.assertGreater(produced_dec, 0, f"Failed with application type {app_type}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
-
