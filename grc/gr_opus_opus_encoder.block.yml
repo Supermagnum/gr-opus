@@ -7,9 +7,6 @@ templates:
   make: gr_opus.opus_encoder(${sample_rate}, ${channels}, ${bitrate}, ${application})
   var_make: |-
     var ${id} = block_${id};
-  callbacks:
-    - |-
-      set_encoder_params(${id}, ${sample_rate}, ${channels}, ${bitrate}, ${application})
 parameters:
 - id: sample_rate
   label: Sample Rate (Hz)
