@@ -126,6 +126,34 @@ The decoder automatically detects and decodes FARGAN/DRED when present in receiv
 
 If Opus is built from source with `--enable-dred --enable-osce`, the FARGAN voice encoder is available. It supports voice at 1.6 kbps. Opus source: <https://github.com/xiph/opus>
 
+### FARGAN vs Codec2
+
+| Aspect | FARGAN (Opus DRED) | Codec2 |
+|--------|-------------------|--------|
+| Bitrate | 1.6 kbps | 450-3200 bps (typical: 1200-2400) |
+| Technology | Neural vocoder (GAN-based), hybrid CELP/MDCT | Sinusoidal coding, LPC |
+| Quality at low rate | Natural-sounding, modern synthesis | Robotic, optimized for intelligibility |
+| Latency | Low, configurable frame sizes | 40 ms frames at 1200 bps |
+| Noise robustness | Good with DRED redundancy | Limited; degrades in noise |
+| Language support | Language-independent training | Optimized for English |
+| Standardization | IETF Opus, industry adoption | Open source, amateur radio focus |
+
+**Advantages of FARGAN over Codec2:** FARGAN delivers more natural-sounding speech at 1.6 kbps than Codec2 at 1200-2400 bps. It uses a neural vocoder that better preserves speaker characteristics and prosody. DRED redundancy improves robustness under packet loss. FARGAN is part of the Opus codec family, widely used in VoIP and streaming.
+
+### FARGAN vs MELPe
+
+| Aspect | FARGAN (Opus DRED) | MELPe |
+|--------|-------------------|-------|
+| Bitrate | 1.6 kbps | 600, 1200, 2400 bps |
+| Standard | IETF Opus (RFC 6716) | MIL-STD-3005, STANAG-4591 (NATO) |
+| Technology | Neural vocoder (FARGAN), hybrid codec | Mixed Excitation Linear Prediction |
+| Licensing | BSD-like (Opus) | Military/government |
+| Availability | Open source, gr-opus | Proprietary implementations |
+| Noise robustness | Good | Excellent (designed for battlefield) |
+| Quality at comparable rate | Higher at 1.6 kbps | Strong at 1200/2400 bps |
+
+**Advantages of FARGAN over MELPe:** FARGAN is fully open source and freely available. At 1.6 kbps it achieves quality comparable to or better than MELPe at 1200 bps, with more natural synthesis. MELPe excels in very noisy environments (vehicles, aircraft) due to military testing; FARGAN with DRED targets general-purpose robustness. MELPe requires proprietary licenses for many uses.
+
 ### Suggested Universal HF/VHF/UHF Mode Usage
 
 | Parameter | Value |
