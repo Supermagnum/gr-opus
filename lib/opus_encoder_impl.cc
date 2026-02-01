@@ -28,14 +28,16 @@
 #include <stdexcept>
 #include <algorithm>
 #include <cstring>
+#include <fstream>
+#include <vector>
 
 namespace gr {
 namespace gr_opus {
 
 opus_encoder::sptr
-opus_encoder::make(int sample_rate, int channels, int bitrate, const std::string& application)
+opus_encoder::make(int sample_rate, int channels, int bitrate, const std::string& application, bool enable_fargan_voice, const std::string& dnn_blob_path)
 {
-    return gnuradio::get_initial_sptr(new opus_encoder_impl(sample_rate, channels, bitrate, application));
+    return gnuradio::get_initial_sptr(new opus_encoder_impl(sample_rate, channels, bitrate, application, enable_fargan_voice, dnn_blob_path));
 }
 
 int opus_encoder_impl::application_string_to_int(const std::string& application)
@@ -49,7 +51,7 @@ int opus_encoder_impl::application_string_to_int(const std::string& application)
     }
 }
 
-opus_encoder_impl::opus_encoder_impl(int sample_rate, int channels, int bitrate, const std::string& application)
+opus_encoder_impl::opus_encoder_impl(int sample_rate, int channels, int bitrate, const std::string& application, bool enable_fargan_voice, const std::string& dnn_blob_path)
     : gr::sync_block("opus_encoder",
                      gr::io_signature::make(1, 1, sizeof(float)),
                      gr::io_signature::make(1, 1, sizeof(unsigned char))),
@@ -57,7 +59,8 @@ opus_encoder_impl::opus_encoder_impl(int sample_rate, int channels, int bitrate,
       d_channels(channels),
       d_bitrate(bitrate),
       d_frame_size(static_cast<int>(sample_rate * 0.020)),
-      d_max_buffer_samples(sample_rate * channels * 10)
+      d_max_buffer_samples(sample_rate * channels * 10),
+      d_enable_fargan_voice(enable_fargan_voice)
 {
     int error;
     int application_int = application_string_to_int(application);
@@ -72,6 +75,38 @@ opus_encoder_impl::opus_encoder_impl(int sample_rate, int channels, int bitrate,
         opus_encoder_destroy(d_encoder);
         throw std::runtime_error("Failed to set Opus encoder bitrate: " + std::string(opus_strerror(error)));
     }
+
+#ifdef OPUS_HAVE_DRED
+    if (d_enable_fargan_voice) {
+        const int dred_duration = 5;
+        error = opus_encoder_ctl(d_encoder, OPUS_SET_DRED_DURATION(dred_duration));
+        if (error != OPUS_OK) {
+            opus_encoder_destroy(d_encoder);
+            throw std::runtime_error("Failed to set Opus DRED/FARGAN: " + std::string(opus_strerror(error)));
+        }
+    }
+#endif
+
+#ifdef OPUS_HAVE_DNN_BLOB
+    if (!dnn_blob_path.empty()) {
+        std::ifstream f(dnn_blob_path, std::ios::binary | std::ios::ate);
+        if (!f) {
+            opus_encoder_destroy(d_encoder);
+            throw std::runtime_error("Failed to open DNN blob file: " + dnn_blob_path);
+        }
+        std::vector<char> blob(f.tellg());
+        f.seekg(0);
+        if (!f.read(blob.data(), blob.size())) {
+            opus_encoder_destroy(d_encoder);
+            throw std::runtime_error("Failed to read DNN blob file: " + dnn_blob_path);
+        }
+        error = opus_encoder_ctl(d_encoder, OPUS_SET_DNN_BLOB(blob.data(), static_cast<int>(blob.size())));
+        if (error != OPUS_OK) {
+            opus_encoder_destroy(d_encoder);
+            throw std::runtime_error("Failed to set Opus DNN blob (FARGAN): " + std::string(opus_strerror(error)));
+        }
+    }
+#endif
 }
 
 opus_encoder_impl::~opus_encoder_impl()

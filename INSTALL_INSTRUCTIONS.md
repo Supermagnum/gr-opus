@@ -30,32 +30,49 @@ The blocks should appear under the `[gr-opus]` category in the block tree.
 
 ## If Blocks Don't Appear
 
-1. **Check GRC block location:**
+1. **Check GRC block location:** Blocks install to GNU Radio's share path (detected at configure time):
    ```bash
+   ls /usr/local/share/gnuradio/grc/blocks/gr_opus_*.block.yml
+   # or if GNU Radio from packages:
    ls /usr/share/gnuradio/grc/blocks/gr_opus_*.block.yml
    ```
-   If using a custom install prefix, check:
+
+2. **Ensure install path matches GRC search:** CMake uses `pkg-config --variable=prefix gnuradio-runtime` so blocks go where GRC looks. If using a custom prefix, add to `~/.gnuradio/config.conf`:
+   ```ini
+   [grc]
+   global_blocks_path = /path/to/share/gnuradio/grc/blocks
+   ```
+   Or set `GRC_BLOCKS_PATH` to include your block directory:
    ```bash
-   ls ${CMAKE_INSTALL_PREFIX}/share/gnuradio/grc/blocks/gr_opus_*.block.yml
+   export GRC_BLOCKS_PATH=/path/to/share/gnuradio/grc/blocks:$GRC_BLOCKS_PATH
    ```
 
-2. **Check Python module:**
+3. **Check Python module:**
    ```bash
    python3 -c "from gnuradio import gr_opus; print(gr_opus.__file__)"
    ```
 
-3. **Clear GRC cache:**
+4. **Clear GRC cache:**
    ```bash
-   rm -rf ~/.gnuradio/grc_cache
+   rm -rf ~/.cache/gnuradio/grc/cache_v2.json
    ```
    Then restart GRC.
 
-4. **Check GRC block search path:**
+5. **Verify GRC block paths:**
    ```bash
-   python3 -c "from gnuradio import grc; import os; print(os.pathsep.join(grc.get_blocks_path()))"
+   python3 -c "
+   from gnuradio.grc.core.Config import Config
+   from gnuradio import gr
+   c = Config(gr.version(), prefs=gr.prefs())
+   print('Block paths:', c.block_paths)
+   "
    ```
 
 ## Troubleshooting
+
+### SWIG / gnuradio.i warnings
+
+If CMake reports "gnuradio.i not in GNU Radio install - using bundled swig/gnuradio.i", this is normal. GNU Radio 3.9+ often omits SWIG interface files. gr-opus includes a minimal `gnuradio.i` fallback, so the build succeeds. No action needed.
 
 ### Module import errors
 

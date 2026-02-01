@@ -4,7 +4,7 @@ category: '[gr-opus]'
 flags: [python, throttle]
 templates:
   imports: from gnuradio import gr_opus
-  make: gr_opus.opus_encoder(${sample_rate}, ${channels}, ${bitrate}, ${application})
+  make: gr_opus.opus_encoder(${sample_rate}, ${channels}, ${bitrate}, ${application}, ${enable_fargan_voice}, ${dnn_blob_path})
   var_make: |-
     var ${id} = block_${id};
 parameters:
@@ -27,6 +27,14 @@ parameters:
   dtype: string
   default: audio
   options: ['voip', 'audio', 'lowdelay']
+- id: enable_fargan_voice
+  label: Enable FARGAN voice
+  dtype: bool
+  default: 'false'
+- id: dnn_blob_path
+  label: DNN/FARGAN blob path (optional)
+  dtype: string
+  default: ''
 inputs:
 - domain: stream
   dtype: float

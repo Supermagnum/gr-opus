@@ -32,7 +32,7 @@ class GR_OPUS_API opus_encoder : virtual public gr::sync_block
 public:
     typedef std::shared_ptr<opus_encoder> sptr;
 
-    static sptr make(int sample_rate, int channels, int bitrate, const std::string& application);
+    static sptr make(int sample_rate, int channels, int bitrate, const std::string& application, bool enable_fargan_voice = false, const std::string& dnn_blob_path = "");
 };
 
 } // namespace gr_opus

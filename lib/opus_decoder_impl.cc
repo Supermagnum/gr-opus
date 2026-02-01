@@ -28,17 +28,19 @@
 #include <algorithm>
 #include <cstring>
 #include <set>
+#include <fstream>
+#include <vector>
 
 namespace gr {
 namespace gr_opus {
 
 opus_decoder::sptr
-opus_decoder::make(int sample_rate, int channels, int packet_size)
+opus_decoder::make(int sample_rate, int channels, int packet_size, const std::string& dnn_blob_path)
 {
-    return gnuradio::get_initial_sptr(new opus_decoder_impl(sample_rate, channels, packet_size));
+    return gnuradio::get_initial_sptr(new opus_decoder_impl(sample_rate, channels, packet_size, dnn_blob_path));
 }
 
-opus_decoder_impl::opus_decoder_impl(int sample_rate, int channels, int packet_size)
+opus_decoder_impl::opus_decoder_impl(int sample_rate, int channels, int packet_size, const std::string& dnn_blob_path)
     : gr::sync_block("opus_decoder",
                      gr::io_signature::make(1, 1, sizeof(unsigned char)),
                      gr::io_signature::make(1, 1, sizeof(float))),
@@ -47,6 +49,11 @@ opus_decoder_impl::opus_decoder_impl(int sample_rate, int channels, int packet_s
       d_packet_size(packet_size),
       d_frame_size(static_cast<int>(sample_rate * 0.020)),
       d_max_buffer_size(1024 * 1024)
+#ifdef OPUS_HAVE_DRED
+      , d_dred_decoder(nullptr)
+      , d_dred(nullptr)
+      , d_lost_count(0)
+#endif
 {
     int error;
 
@@ -54,10 +61,67 @@ opus_decoder_impl::opus_decoder_impl(int sample_rate, int channels, int packet_s
     if (error != OPUS_OK || d_decoder == nullptr) {
         throw std::runtime_error("Failed to create Opus decoder: " + std::string(opus_strerror(error)));
     }
+
+#ifdef OPUS_HAVE_DNN_BLOB
+    std::vector<char> blob;
+    if (!dnn_blob_path.empty()) {
+        std::ifstream f(dnn_blob_path, std::ios::binary | std::ios::ate);
+        if (!f) {
+            opus_decoder_destroy(d_decoder);
+            throw std::runtime_error("Failed to open DNN blob file: " + dnn_blob_path);
+        }
+        blob.resize(f.tellg());
+        f.seekg(0);
+        if (!f.read(blob.data(), blob.size())) {
+            opus_decoder_destroy(d_decoder);
+            throw std::runtime_error("Failed to read DNN blob file: " + dnn_blob_path);
+        }
+        error = opus_decoder_ctl(d_decoder, OPUS_SET_DNN_BLOB(blob.data(), static_cast<int>(blob.size())));
+        if (error != OPUS_OK) {
+            opus_decoder_destroy(d_decoder);
+            throw std::runtime_error("Failed to set Opus DNN blob (FARGAN): " + std::string(opus_strerror(error)));
+        }
+    }
+#endif
+
+#ifdef OPUS_HAVE_DRED
+    d_dred_decoder = opus_dred_decoder_create(&error);
+    if (error != OPUS_OK || d_dred_decoder == nullptr) {
+        opus_decoder_destroy(d_decoder);
+        throw std::runtime_error("Failed to create Opus DRED decoder: " + std::string(opus_strerror(error)));
+    }
+    d_dred = opus_dred_alloc(&error);
+    if (error != OPUS_OK || d_dred == nullptr) {
+        opus_dred_decoder_destroy(d_dred_decoder);
+        opus_decoder_destroy(d_decoder);
+        throw std::runtime_error("Failed to alloc Opus DRED state: " + std::string(opus_strerror(error)));
+    }
+#ifdef OPUS_HAVE_DNN_BLOB
+    if (!dnn_blob_path.empty() && !blob.empty()) {
+        error = opus_dred_decoder_ctl(d_dred_decoder, OPUS_SET_DNN_BLOB(blob.data(), static_cast<int>(blob.size())));
+        if (error != OPUS_OK) {
+            opus_dred_free(d_dred);
+            opus_dred_decoder_destroy(d_dred_decoder);
+            opus_decoder_destroy(d_decoder);
+            throw std::runtime_error("Failed to set DRED DNN blob: " + std::string(opus_strerror(error)));
+        }
+    }
+#endif
+#endif
 }
 
 opus_decoder_impl::~opus_decoder_impl()
 {
+#ifdef OPUS_HAVE_DRED
+    if (d_dred != nullptr) {
+        opus_dred_free(d_dred);
+        d_dred = nullptr;
+    }
+    if (d_dred_decoder != nullptr) {
+        opus_dred_decoder_destroy(d_dred_decoder);
+        d_dred_decoder = nullptr;
+    }
+#endif
     if (d_decoder != nullptr) {
         opus_decoder_destroy(d_decoder);
         d_decoder = nullptr;
@@ -82,6 +146,7 @@ int opus_decoder_impl::work(int noutput_items,
 
     int output_idx = 0;
     std::vector<opus_int16> decoded_pcm(d_frame_size * d_channels);
+    std::vector<float> dred_pcm(d_frame_size * d_channels);
 
     if (d_packet_size > 0) {
         while (d_packet_buffer.size() >= static_cast<size_t>(d_packet_size) && output_idx < noutput_items) {
@@ -91,6 +156,29 @@ int opus_decoder_impl::work(int noutput_items,
             );
             d_packet_buffer.erase(d_packet_buffer.begin(), d_packet_buffer.begin() + d_packet_size);
 
+#ifdef OPUS_HAVE_DRED
+            if (d_lost_count > 0) {
+                int dred_end = 0;
+                int dred_amount = opus_dred_parse(d_dred_decoder, d_dred, packet.data(), d_packet_size,
+                    d_lost_count * d_frame_size, d_sample_rate, &dred_end, 0);
+                if (dred_amount > 0) {
+                    for (int fr = 0; fr < d_lost_count && output_idx < noutput_items; ++fr) {
+                        int dred_offset = (d_lost_count - fr) * d_frame_size;
+                        int samples = opus_decoder_dred_decode_float(d_decoder, d_dred, dred_offset,
+                            dred_pcm.data(), d_frame_size);
+                        if (samples > 0) {
+                            int to_write = std::min(samples * d_channels, noutput_items - output_idx);
+                            for (int i = 0; i < to_write; ++i) {
+                                out[output_idx + i] = std::max(-1.0f, std::min(1.0f, dred_pcm[i]));
+                            }
+                            output_idx += to_write;
+                        }
+                    }
+                }
+                d_lost_count = 0;
+            }
+#endif
+
             int decoded_samples = opus_decode(d_decoder,
                                                packet.data(),
                                                d_packet_size,
@@ -99,6 +187,9 @@ int opus_decoder_impl::work(int noutput_items,
                                                0);
 
             if (decoded_samples < 0) {
+#ifdef OPUS_HAVE_DRED
+                d_lost_count++;
+#endif
                 continue;
             }
 

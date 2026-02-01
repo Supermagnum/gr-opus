@@ -1,0 +1,4 @@
+'[gr-opus]':
+- Audio:
+  - gr_opus_opus_encoder
+  - gr_opus_opus_decoder

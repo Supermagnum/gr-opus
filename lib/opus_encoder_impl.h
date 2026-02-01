@@ -37,13 +37,14 @@ private:
     int d_channels;
     int d_bitrate;
     int d_frame_size;
+    bool d_enable_fargan_voice;
     std::vector<float> d_sample_buffer;
     size_t d_max_buffer_samples;
 
     int application_string_to_int(const std::string& application);
 
 public:
-    opus_encoder_impl(int sample_rate, int channels, int bitrate, const std::string& application);
+    opus_encoder_impl(int sample_rate, int channels, int bitrate, const std::string& application, bool enable_fargan_voice = false, const std::string& dnn_blob_path = "");
     ~opus_encoder_impl();
 
     int work(int noutput_items,

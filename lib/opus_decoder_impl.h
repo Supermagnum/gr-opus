@@ -38,9 +38,14 @@ private:
     int d_frame_size;
     std::vector<unsigned char> d_packet_buffer;
     size_t d_max_buffer_size;
+#ifdef OPUS_HAVE_DRED
+    OpusDREDDecoder* d_dred_decoder;
+    OpusDRED* d_dred;
+    int d_lost_count;
+#endif
 
 public:
-    opus_decoder_impl(int sample_rate, int channels, int packet_size);
+    opus_decoder_impl(int sample_rate, int channels, int packet_size, const std::string& dnn_blob_path = "");
     ~opus_decoder_impl();
 
     int work(int noutput_items,

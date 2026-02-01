@@ -37,8 +37,18 @@ if(NOT GR_LIBRARY_DIR)
 endif()
 
 if(NOT GRC_BLOCKS_DIR)
-    # Default to /usr/local/share to match GNU Radio source installs
-    set(GRC_BLOCKS_DIR "${CMAKE_INSTALL_PREFIX}/share/gnuradio/grc/blocks")
+    execute_process(
+        COMMAND pkg-config --variable=prefix gnuradio-runtime
+        OUTPUT_VARIABLE GR_PREFIX
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE GR_PREFIX_RESULT
+    )
+    if(GR_PREFIX_RESULT EQUAL 0 AND GR_PREFIX)
+        set(GRC_BLOCKS_DIR "${GR_PREFIX}/share/gnuradio/grc/blocks")
+        message(STATUS "GRC blocks will install to: ${GRC_BLOCKS_DIR}")
+    else()
+        set(GRC_BLOCKS_DIR "${CMAKE_INSTALL_PREFIX}/share/gnuradio/grc/blocks")
+    endif()
 endif()
 set(GRC_BLOCKS_DIR ${GRC_BLOCKS_DIR} CACHE PATH "Directory for GRC block definitions")
 

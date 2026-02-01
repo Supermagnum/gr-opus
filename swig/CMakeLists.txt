@@ -33,49 +33,53 @@ set(CMAKE_SWIG_FLAGS -fvirtual -python -c++ -keyword -w511)
 # Initialize GR_SWIG_INCLUDE_DIRS
 set(GR_SWIG_INCLUDE_DIRS "")
 
-# Find gnuradio.i file (required for SWIG interface)
-# This file is typically in share/gnuradio/swig/ or include/gnuradio/swig/
+# Get GNU Radio prefix for swig path (same as GRC blocks)
+set(GR_SWIG_SEARCH_PATHS
+    ${GR_INCLUDE_DIRS}
+    "${CMAKE_INSTALL_PREFIX}/share/gnuradio/swig"
+    "/usr/local/share/gnuradio/swig"
+    "/usr/share/gnuradio/swig"
+    "${CMAKE_INSTALL_PREFIX}/include/gnuradio/swig"
+    "/usr/local/include/gnuradio/swig"
+    "/usr/include/gnuradio/swig"
+)
+execute_process(
+    COMMAND pkg-config --variable=prefix gnuradio-runtime
+    OUTPUT_VARIABLE GR_PREFIX_SWIG
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE GR_PREFIX_RESULT
+)
+if(GR_PREFIX_RESULT EQUAL 0 AND GR_PREFIX_SWIG)
+    list(APPEND GR_SWIG_SEARCH_PATHS
+        "${GR_PREFIX_SWIG}/share/gnuradio/swig"
+        "${GR_PREFIX_SWIG}/include/gnuradio/swig"
+    )
+endif()
+
+# Find gnuradio.i (required for SWIG interface)
+# GNU Radio 3.9+ uses PyBind11 for core; OOT modules may need gnuradio.i from build
+# or use the bundled minimal fallback in swig/gnuradio.i
 find_file(GR_SWIG_I_FILE
     NAMES gnuradio.i
-    PATHS ${GR_INCLUDE_DIRS}
-         "${CMAKE_INSTALL_PREFIX}/share/gnuradio/swig"
-         "/usr/local/share/gnuradio/swig"
-         "/usr/share/gnuradio/swig"
-         "${CMAKE_INSTALL_PREFIX}/include/gnuradio/swig"
-         "/usr/local/include/gnuradio/swig"
-         "/usr/include/gnuradio/swig"
+    PATHS ${GR_SWIG_SEARCH_PATHS}
     NO_DEFAULT_PATH
 )
 
 if(GR_SWIG_I_FILE)
     get_filename_component(GR_SWIG_I_DIR ${GR_SWIG_I_FILE} DIRECTORY)
     message(STATUS "Found gnuradio.i at: ${GR_SWIG_I_FILE}")
-    message(STATUS "GNU Radio SWIG interface directory: ${GR_SWIG_I_DIR}")
     list(APPEND CMAKE_SWIG_FLAGS "-I${GR_SWIG_I_DIR}")
     list(APPEND GR_SWIG_INCLUDE_DIRS ${GR_SWIG_I_DIR})
 else()
-    # Try to find it in standard SWIG directories (without NO_DEFAULT_PATH)
-    find_file(GR_SWIG_I_FILE
-        NAMES gnuradio.i
-        PATHS ${GR_INCLUDE_DIRS}
-             "${CMAKE_INSTALL_PREFIX}/share/gnuradio/swig"
-             "/usr/local/share/gnuradio/swig"
-             "/usr/share/gnuradio/swig"
-             "${CMAKE_INSTALL_PREFIX}/include/gnuradio/swig"
-             "/usr/local/include/gnuradio/swig"
-             "/usr/include/gnuradio/swig"
-    )
-    
+    find_file(GR_SWIG_I_FILE NAMES gnuradio.i PATHS ${GR_SWIG_SEARCH_PATHS})
     if(GR_SWIG_I_FILE)
         get_filename_component(GR_SWIG_I_DIR ${GR_SWIG_I_FILE} DIRECTORY)
         message(STATUS "Found gnuradio.i at: ${GR_SWIG_I_FILE}")
         list(APPEND CMAKE_SWIG_FLAGS "-I${GR_SWIG_I_DIR}")
         list(APPEND GR_SWIG_INCLUDE_DIRS ${GR_SWIG_I_DIR})
     else()
-        message(WARNING "gnuradio.i not found. SWIG compilation may fail.")
-        message(WARNING "  Searched in: ${GR_INCLUDE_DIRS}")
-        message(WARNING "  Please ensure GNU Radio SWIG interface files are installed.")
-        message(WARNING "  Typical locations: /usr/local/share/gnuradio/swig/ or /usr/share/gnuradio/swig/")
+        message(STATUS "gnuradio.i not in GNU Radio install - using bundled swig/gnuradio.i")
+        message(STATUS "  (GNU Radio 3.9+ often omits SWIG interfaces; gr-opus provides a minimal copy)")
     endif()
 endif()
 
@@ -171,9 +175,8 @@ foreach(INCLUDE_DIR ${GR_SWIG_INCLUDE_DIRS} ${GR_INCLUDE_DIRS} ${CMAKE_CURRENT_S
     list(APPEND CMAKE_SWIG_FLAGS "-I${INCLUDE_DIR}")
 endforeach()
 
-# If gnuradio.i was not found, use our local copy
+# If gnuradio.i was not found, use our bundled minimal copy
 if(NOT GR_SWIG_I_FILE)
-    message(STATUS "Using local gnuradio.i file")
     list(APPEND CMAKE_SWIG_FLAGS "-I${CMAKE_CURRENT_SOURCE_DIR}")
 endif()
 

@@ -1,4 +1,44 @@
 ########################################################################
+# Check for DRED and DNN/FARGAN support in Opus
+########################################################################
+
+include(CheckCXXSourceCompiles)
+set(CMAKE_REQUIRED_INCLUDES ${OPUS_INCLUDE_DIRS})
+set(CMAKE_REQUIRED_LIBRARIES ${OPUS_LIBRARIES})
+
+check_cxx_source_compiles("
+#include <opus/opus.h>
+#include <opus/opus_defines.h>
+#ifdef OPUS_SET_DRED_DURATION_REQUEST
+int main() { return 0; }
+#else
+#error DRED not available
+#endif
+" OPUS_HAVE_DRED)
+
+check_cxx_source_compiles("
+#include <opus/opus.h>
+#include <opus/opus_defines.h>
+#ifdef OPUS_SET_DNN_BLOB_REQUEST
+int main() { return 0; }
+#else
+#error DNN_BLOB not available
+#endif
+" OPUS_HAVE_DNN_BLOB)
+
+if(OPUS_HAVE_DRED)
+    message(STATUS "Opus built with DRED support - enabling OPUS_SET_DRED_DURATION")
+else()
+    message(STATUS "Opus built without DRED support - DRED features disabled")
+endif()
+
+if(OPUS_HAVE_DNN_BLOB)
+    message(STATUS "Opus DNN/FARGAN blob API available - enabling OPUS_SET_DNN_BLOB")
+else()
+    message(STATUS "Opus built without DNN blob API - FARGAN external weights disabled")
+endif()
+
+########################################################################
 # Install library
 ########################################################################
 
@@ -16,6 +56,13 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/../include)
 
 add_library(gnuradio-gr_opus SHARED ${gr_opus_sources} ${gr_opus_headers})
+
+if(OPUS_HAVE_DRED)
+    target_compile_definitions(gnuradio-gr_opus PRIVATE OPUS_HAVE_DRED=1)
+endif()
+if(OPUS_HAVE_DNN_BLOB)
+    target_compile_definitions(gnuradio-gr_opus PRIVATE OPUS_HAVE_DNN_BLOB=1)
+endif()
 
 target_link_libraries(gnuradio-gr_opus
     ${GR_RUNTIME_LIBRARIES}

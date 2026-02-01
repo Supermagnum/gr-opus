@@ -4,7 +4,7 @@ category: '[gr-opus]'
 flags: [python, throttle]
 templates:
   imports: from gnuradio import gr_opus
-  make: gr_opus.opus_decoder(${sample_rate}, ${channels}, ${packet_size})
+  make: gr_opus.opus_decoder(${sample_rate}, ${channels}, ${packet_size}, ${dnn_blob_path})
   var_make: |-
     var ${id} = block_${id};
 parameters:
@@ -22,6 +22,10 @@ parameters:
   label: Packet Size (bytes, 0=auto)
   dtype: int
   default: 0
+- id: dnn_blob_path
+  label: DNN/FARGAN blob path (optional)
+  dtype: string
+  default: ''
 inputs:
 - domain: stream
   dtype: byte

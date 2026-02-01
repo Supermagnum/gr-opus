@@ -73,6 +73,8 @@ sudo make install
 sudo ldconfig
 ```
 
+GRC block definitions install to GNU Radio's share path (detected via pkg-config), so they appear in the `[gr-opus]` category after restarting GNU Radio Companion. For custom install prefixes, set `GRC_BLOCKS_PATH` to include your block directory.
+
 ## Usage
 
 ### Python
@@ -110,12 +112,44 @@ The blocks are available in GRC under the `[gr-opus]` category:
 - Channels: 1 (mono) or 2 (stereo)
 - Bitrate: Target bitrate in bits per second
 - Application Type: 'voip', 'audio', or 'lowdelay'
+- Enable FARGAN voice: Toggle for DRED/FARGAN when Opus is built with --enable-dred (see FARGAN section)
 
 ### Opus Decoder
 
 - Sample Rate: 8000, 12000, 16000, 24000, or 48000 Hz
 - Channels: 1 (mono) or 2 (stereo)
 - Packet Size: Fixed packet size in bytes (0 for auto-detect/variable)
+
+The decoder automatically detects and decodes FARGAN/DRED when present in received packets (requires Opus built with --enable-dred).
+
+## FARGAN Voice Encoder for Amateur Radio
+
+If Opus is built from source with `--enable-dred --enable-osce`, the FARGAN voice encoder is available. It supports voice at 1.6 kbps. Opus source: <https://github.com/xiph/opus>
+
+### Suggested Universal HF/VHF/UHF Mode Usage
+
+| Parameter | Value |
+|-----------|-------|
+| Bandwidth | 6 kHz |
+| Modulation | 4FSK |
+| FEC | LDPC rate 1/2, soft-decision |
+| Raw data rate | ~6 kbps |
+| Usable data rate | ~3 kbps |
+| Interleaver depth | 500 ms to 1 s |
+
+### Link Budget
+
+| Component | Bitrate |
+|-----------|---------|
+| FARGAN voice | 1600 bps |
+| Framing/sync/overhead | ~400 bps |
+| LDPC parity (rate 1/2) | 3000 bps |
+| Total | ~6000 bps |
+
+### Suitable Amateur Bands
+
+- **NVIS**: 80 m, 40 m
+- **DX**: 40 m, 20 m, 17 m, 15 m, 10 m, 6 m
 
 ## Testing
 
