@@ -17,7 +17,7 @@ class opus_decoder(gr.sync_block):
     Output: Float32 audio samples (mono or stereo)
     """
 
-    def __init__(self, sample_rate=48000, channels=1, packet_size=0):
+    def __init__(self, sample_rate=48000, channels=1, packet_size=0, dnn_blob_path=""):
         """
         Initialize Opus decoder
 
@@ -25,6 +25,7 @@ class opus_decoder(gr.sync_block):
             sample_rate: Output sample rate (8000, 12000, 16000, 24000, or 48000 Hz)
             channels: Number of channels (1 for mono, 2 for stereo)
             packet_size: Fixed packet size in bytes (0 for variable/auto-detect)
+            dnn_blob_path: Ignored in Python fallback (C++ DRED only)
         """
         gr.sync_block.__init__(self, name="opus_decoder", in_sig=[np.uint8], out_sig=[np.float32])
 

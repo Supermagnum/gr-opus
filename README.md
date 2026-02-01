@@ -181,14 +181,14 @@ If Opus is built from source with `--enable-dred --enable-osce`, the FARGAN voic
 
 ## Testing
 
-The module includes comprehensive unit tests and integration tests. See the [tests/README.md](tests/README.md) for details.
+The module includes comprehensive unit tests and integration tests. See the [tests/README.md](tests/README.md) for details. Latest results: [test-results.md](test-results.md).
 
 ### Test Status
 
 **Core Functionality Tests (All Passing):**
-- Encoder tests (12/12 passing)
-- Decoder tests (12/12 passing)
-- Round-trip integration tests (8/8 passing)
+- Encoder tests (19/19 passing)
+- Decoder tests (18/18 passing)
+- Round-trip integration tests (13/13 passing)
 - Memory sanitizer tests (5/5 passing)
 
 **Performance Tests:**

@@ -10,9 +10,13 @@ import unittest
 import numpy as np
 from gnuradio import gr
 
-# Add parent directory to path to import gr_opus
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
-from opus_encoder import opus_encoder
+# Prefer gr_opus from gnuradio (C++ or Python); fallback to local python
+try:
+    from gnuradio import gr_opus
+    opus_encoder = gr_opus.opus_encoder
+except ImportError:
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
+    from opus_encoder import opus_encoder
 
 
 class qa_opus_encoder(unittest.TestCase):
@@ -35,7 +39,8 @@ class qa_opus_encoder(unittest.TestCase):
         self.assertEqual(encoder.sample_rate, 48000)
         self.assertEqual(encoder.channels, 1)
         self.assertEqual(encoder.bitrate, 64000)
-        self.assertIsNotNone(encoder.encoder)
+        if hasattr(encoder, "encoder"):
+            self.assertIsNotNone(encoder.encoder)
 
     def test_002_encoder_initialization_custom_params(self):
         """Test encoder initialization with custom parameters"""
@@ -45,11 +50,22 @@ class qa_opus_encoder(unittest.TestCase):
         self.assertEqual(encoder.bitrate, 128000)
         self.assertEqual(encoder.frame_size, int(16000 * 0.020))
 
+    def test_002b_encoder_optional_params(self):
+        """Test encoder with optional enable_fargan_voice and dnn_blob_path (API compatibility)"""
+        try:
+            encoder = opus_encoder(enable_fargan_voice=False, dnn_blob_path="")
+            self.assertIsNotNone(encoder)
+            encoder2 = opus_encoder(enable_fargan_voice=True, dnn_blob_path="")
+            self.assertIsNotNone(encoder2)
+        except TypeError:
+            self.skipTest("Optional params not supported by this build")
+
     def test_003_encoder_application_types(self):
         """Test encoder with different application types"""
         for app_type in ["voip", "audio", "lowdelay"]:
             encoder = opus_encoder(application=app_type)
-            self.assertIsNotNone(encoder.encoder)
+            if hasattr(encoder, "encoder"):
+                self.assertIsNotNone(encoder.encoder)
 
     def test_004_encoder_sample_rates(self):
         """Test encoder with different sample rates"""
@@ -115,8 +131,9 @@ class qa_opus_encoder(unittest.TestCase):
 
         # Should not produce output yet (partial frame)
         self.assertEqual(produced, 0)
-        # Buffer should contain the samples
-        self.assertEqual(len(encoder.sample_buffer), partial_samples)
+        # Buffer should contain the samples (Python impl); C++ may not expose buffer
+        if hasattr(encoder, "sample_buffer"):
+            self.assertEqual(len(encoder.sample_buffer), partial_samples)
 
     def test_009_encoder_stereo_frame(self):
         """Test encoding stereo frame"""
@@ -171,6 +188,58 @@ class qa_opus_encoder(unittest.TestCase):
         produced = encoder.work([empty_input], [output_data])
 
         self.assertEqual(produced, 0)
+
+    def test_013_encoder_minimum_bitrate(self):
+        """Test encoder with minimum bitrate (6 kbps)"""
+        encoder = opus_encoder(sample_rate=self.sample_rate, channels=1, bitrate=6000)
+        test_signal = np.sin(2 * np.pi * 440 * np.linspace(0, 0.02, self.frame_size, False),
+                             dtype=np.float32) * 0.5
+        output_data = np.zeros(4000, dtype=np.uint8)
+        produced = encoder.work([test_signal], [output_data])
+        self.assertGreater(produced, 0)
+
+    def test_014_encoder_maximum_bitrate(self):
+        """Test encoder with high bitrate"""
+        encoder = opus_encoder(sample_rate=self.sample_rate, channels=1, bitrate=256000)
+        test_signal = np.sin(2 * np.pi * 440 * np.linspace(0, 0.02, self.frame_size, False),
+                             dtype=np.float32) * 0.8
+        output_data = np.zeros(4000, dtype=np.uint8)
+        produced = encoder.work([test_signal], [output_data])
+        self.assertGreater(produced, 0)
+
+    def test_015_encoder_negative_values(self):
+        """Test encoding with negative input values"""
+        encoder = opus_encoder(sample_rate=self.sample_rate, channels=self.channels)
+        test_signal = -np.ones(self.frame_size, dtype=np.float32) * 0.5
+        output_data = np.zeros(4000, dtype=np.uint8)
+        produced = encoder.work([test_signal], [output_data])
+        self.assertGreaterEqual(produced, 0)
+
+    def test_016_encoder_single_sample(self):
+        """Test encoding with single sample (edge case)"""
+        encoder = opus_encoder(sample_rate=self.sample_rate, channels=self.channels)
+        single_sample = np.array([0.1], dtype=np.float32)
+        output_data = np.zeros(4000, dtype=np.uint8)
+        produced = encoder.work([single_sample], [output_data])
+        self.assertEqual(produced, 0)
+
+    def test_017_encoder_frame_boundary(self):
+        """Test encoding exactly one frame at boundary"""
+        encoder = opus_encoder(sample_rate=self.sample_rate, channels=self.channels)
+        test_signal = np.random.randn(self.frame_size).astype(np.float32) * 0.3
+        output_data = np.zeros(4000, dtype=np.uint8)
+        produced = encoder.work([test_signal], [output_data])
+        self.assertGreater(produced, 0)
+
+    def test_018_encoder_small_output_buffer(self):
+        """Test encoding when output buffer is smaller than encoded packet"""
+        encoder = opus_encoder(sample_rate=self.sample_rate, channels=self.channels)
+        test_signal = np.sin(2 * np.pi * 440 * np.linspace(0, 0.02, self.frame_size, False),
+                             dtype=np.float32) * 0.8
+        output_data = np.zeros(2, dtype=np.uint8)
+        produced = encoder.work([test_signal], [output_data])
+        self.assertIsInstance(produced, int)
+        self.assertGreaterEqual(produced, 0)
 
 
 if __name__ == "__main__":

@@ -10,10 +10,15 @@ import unittest
 import numpy as np
 from gnuradio import gr
 
-# Add parent directory to path to import gr_opus
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
-from opus_decoder import opus_decoder
-from opus_encoder import opus_encoder
+# Prefer gr_opus from gnuradio; fallback to local python
+try:
+    from gnuradio import gr_opus
+    opus_encoder = gr_opus.opus_encoder
+    opus_decoder = gr_opus.opus_decoder
+except ImportError:
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
+    from opus_decoder import opus_decoder
+    from opus_encoder import opus_encoder
 
 
 class qa_opus_roundtrip(unittest.TestCase):
@@ -33,8 +38,7 @@ class qa_opus_roundtrip(unittest.TestCase):
     def _roundtrip_encode_decode(self, input_signal, sample_rate=48000, channels=1, bitrate=64000):
         """Helper function to encode and decode a signal"""
         encoder = opus_encoder(sample_rate=sample_rate, channels=channels, bitrate=bitrate)
-
-        decoder = opus_decoder(sample_rate=sample_rate, channels=channels, packet_size=0)  # Auto-detect
+        decoder = opus_decoder(sample_rate=sample_rate, channels=channels, packet_size=0)
 
         # Encode
         encoded_output = np.zeros(10000, dtype=np.uint8)
@@ -180,6 +184,62 @@ class qa_opus_roundtrip(unittest.TestCase):
                 produced_dec = decoder.work([encoded_data], [decoded_output])
 
                 self.assertGreater(produced_dec, 0, f"Failed with application type {app_type}")
+
+    def test_009_roundtrip_low_bitrate(self):
+        """Test round-trip at low bitrate (16 kbps)"""
+        num_samples = self.frame_size * 3
+        t = np.linspace(0, 3 * 0.020, num_samples, False)
+        input_signal = np.sin(2 * np.pi * 440 * t, dtype=np.float32) * 0.8
+        encoded, decoded = self._roundtrip_encode_decode(input_signal, bitrate=16000)
+        self.assertIsNotNone(encoded)
+        self.assertIsNotNone(decoded)
+        self.assertGreater(len(decoded), 0)
+
+    def test_010_roundtrip_very_short_signal(self):
+        """Test round-trip with minimal signal (one frame)"""
+        input_signal = np.sin(2 * np.pi * 440 * np.linspace(0, 0.02, self.frame_size, False),
+                              dtype=np.float32) * 0.5
+        encoded, decoded = self._roundtrip_encode_decode(input_signal)
+        self.assertIsNotNone(encoded)
+        self.assertIsNotNone(decoded)
+        self.assertGreater(len(decoded), 0)
+
+    def test_011_roundtrip_near_clipping(self):
+        """Test round-trip with signal near clipping (0.99)"""
+        num_samples = self.frame_size * 2
+        input_signal = np.sin(2 * np.pi * 440 * np.linspace(0, 2 * 0.020, num_samples, False),
+                              dtype=np.float32) * 0.99
+        encoded, decoded = self._roundtrip_encode_decode(input_signal)
+        self.assertIsNotNone(encoded)
+        self.assertIsNotNone(decoded)
+
+    def test_012_roundtrip_mixed_frequencies(self):
+        """Test round-trip with mixed frequency content"""
+        num_samples = self.frame_size * 4
+        t = np.linspace(0, 4 * 0.020, num_samples, False)
+        low = np.sin(2 * np.pi * 200 * t, dtype=np.float32)
+        high = np.sin(2 * np.pi * 3000 * t, dtype=np.float32)
+        input_signal = (low * 0.5 + high * 0.3).astype(np.float32)
+        encoded, decoded = self._roundtrip_encode_decode(input_signal)
+        self.assertIsNotNone(encoded)
+        self.assertIsNotNone(decoded)
+        self.assertGreater(len(decoded), 0)
+
+    def test_013_roundtrip_voip_lowdelay(self):
+        """Test round-trip with voip and lowdelay applications"""
+        num_samples = self.frame_size * 2
+        t = np.linspace(0, 2 * 0.020, num_samples, False)
+        input_signal = np.sin(2 * np.pi * 880 * t, dtype=np.float32) * 0.7
+        for app in ["voip", "lowdelay"]:
+            encoder = opus_encoder(sample_rate=self.sample_rate, channels=1, application=app)
+            decoder = opus_decoder(sample_rate=self.sample_rate, channels=1)
+            enc_out = np.zeros(10000, dtype=np.uint8)
+            produced_enc = encoder.work([input_signal], [enc_out])
+            self.assertGreater(produced_enc, 0, f"Failed to encode with {app}")
+            enc_data = enc_out[:produced_enc]
+            dec_out = np.zeros(len(input_signal) * 2, dtype=np.float32)
+            produced_dec = decoder.work([enc_data], [dec_out])
+            self.assertGreater(produced_dec, 0, f"Failed to decode with {app}")
 
 
 if __name__ == "__main__":

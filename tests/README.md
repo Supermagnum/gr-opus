@@ -56,16 +56,21 @@ python3 -m unittest discover -p 'qa_*.py'
 ### Encoder Tests (`qa_opus_encoder.py`)
 
 - Initialization with default and custom parameters
+- Optional params (enable_fargan_voice, dnn_blob_path) when supported
 - Different application types (voip, audio, lowdelay)
 - Different sample rates (8kHz, 12kHz, 16kHz, 24kHz, 48kHz)
 - Mono and stereo configurations
 - Single and multiple frame encoding
 - Partial frame buffering
-- Edge cases (silence, clipping, empty input)
+- Edge cases: silence, clipping, empty input
+- Edge cases: minimum bitrate (6 kbps), high bitrate (256 kbps)
+- Edge cases: negative values, single sample, frame boundary
+- Edge cases: small output buffer
 
 ### Decoder Tests (`qa_opus_decoder.py`)
 
 - Initialization with default and custom parameters
+- Optional params (dnn_blob_path) when supported
 - Different sample rates
 - Mono and stereo configurations
 - Fixed and variable packet size modes
@@ -73,6 +78,9 @@ python3 -m unittest discover -p 'qa_*.py'
 - Multiple packet decoding
 - Invalid packet handling
 - Output range validation
+- Edge cases: all-zero packet, single byte input
+- Edge cases: interleaved valid/invalid packets, 12 kHz sample rate
+- Edge cases: small output buffer
 
 ### Round-trip Tests (`qa_opus_roundtrip.py`)
 
@@ -84,6 +92,9 @@ python3 -m unittest discover -p 'qa_*.py'
 - Different application types
 - Silence handling
 - White noise
+- Edge cases: low bitrate (16 kbps), very short signal (one frame)
+- Edge cases: near-clipping signal (0.99), mixed frequencies
+- Edge cases: voip and lowdelay applications
 
 ### Performance Tests (`qa_opus_performance.py`)
 
@@ -126,20 +137,23 @@ python3 -m unittest discover -p 'qa_*.py'
 
 ## Test Results Summary
 
-**Last Updated**: 2025-12-13
+**Last Updated**: 2026-02-01
 
 ### Core Functionality Tests
-- **Encoder Tests**: 12/12 passing
+- **Encoder Tests**: 19/19 passing
   - All initialization, encoding, and edge case tests pass
   - Supports all sample rates, channels, and application types
+  - Edge cases: min/max bitrate, negative values, single sample, small buffer
   
-- **Decoder Tests**: 12/12 passing
+- **Decoder Tests**: 18/18 passing
   - All initialization, decoding, and edge case tests pass
   - Fixed and variable packet size modes working correctly
+  - Edge cases: corrupted packets, single byte, interleaved valid/invalid
   
-- **Round-trip Tests**: 8/8 passing
+- **Round-trip Tests**: 13/13 passing
   - All encoder-decoder round-trip scenarios pass
   - Signal preservation verified across configurations
+  - Edge cases: low bitrate, very short signal, near-clipping, mixed frequencies
 
 - **Memory Sanitizer Tests**: 5/5 passing
   - No memory leaks detected

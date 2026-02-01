@@ -11,9 +11,13 @@ import numpy as np
 import opuslib
 from gnuradio import gr
 
-# Add parent directory to path to import gr_opus
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
-from opus_decoder import opus_decoder
+# Prefer gr_opus from gnuradio; fallback to local python
+try:
+    from gnuradio import gr_opus
+    opus_decoder = gr_opus.opus_decoder
+except ImportError:
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
+    from opus_decoder import opus_decoder
 
 
 class qa_opus_decoder(unittest.TestCase):
@@ -53,7 +57,8 @@ class qa_opus_decoder(unittest.TestCase):
         self.assertEqual(decoder.sample_rate, 48000)
         self.assertEqual(decoder.channels, 1)
         self.assertEqual(decoder.packet_size, 0)
-        self.assertIsNotNone(decoder.decoder)
+        if hasattr(decoder, "decoder"):
+            self.assertIsNotNone(decoder.decoder)
 
     def test_002_decoder_initialization_custom_params(self):
         """Test decoder initialization with custom parameters"""
@@ -113,22 +118,26 @@ class qa_opus_decoder(unittest.TestCase):
 
     def test_007_decoder_partial_packet(self):
         """Test decoder with partial packet (should buffer)"""
-        # Generate encoded packet
         encoded_packet = self._generate_encoded_packet(sample_rate=self.sample_rate, channels=self.channels)
-
         decoder = opus_decoder(sample_rate=self.sample_rate, channels=self.channels, packet_size=len(encoded_packet))
 
-        # Send partial packet
         partial_size = len(encoded_packet) // 2
         input_data = np.frombuffer(encoded_packet[:partial_size], dtype=np.uint8)
         output_data = np.zeros(self.frame_size * 2, dtype=np.float32)
 
         produced = decoder.work([input_data], [output_data])
 
-        # Should not produce output yet (partial packet)
         self.assertEqual(produced, 0)
-        # Buffer should contain the partial packet
-        self.assertGreater(len(decoder.packet_buffer), 0)
+        if hasattr(decoder, "packet_buffer"):
+            self.assertGreater(len(decoder.packet_buffer), 0)
+
+    def test_007b_decoder_optional_params(self):
+        """Test decoder with optional dnn_blob_path (API compatibility)"""
+        try:
+            decoder = opus_decoder(dnn_blob_path="")
+            self.assertIsNotNone(decoder)
+        except TypeError:
+            self.skipTest("Optional params not supported by this build")
 
     def test_008_decoder_multiple_packets(self):
         """Test decoder with multiple packets"""
@@ -197,9 +206,57 @@ class qa_opus_decoder(unittest.TestCase):
         produced = decoder.work([input_data], [output_data])
 
         if produced > 0:
-            # Check that samples are in reasonable range
-            # (allowing some margin for rounding)
             self.assertLessEqual(np.max(np.abs(output_data[:produced])), 1.1)
+
+    def test_013_decoder_corrupted_packet_zeros(self):
+        """Test decoder with all-zero packet (invalid)"""
+        decoder = opus_decoder(sample_rate=self.sample_rate, channels=self.channels, packet_size=60)
+        input_data = np.zeros(60, dtype=np.uint8)
+        output_data = np.zeros(self.frame_size * 2, dtype=np.float32)
+        produced = decoder.work([input_data], [output_data])
+        self.assertIsInstance(produced, int)
+
+    def test_014_decoder_single_byte(self):
+        """Test decoder with single byte input"""
+        decoder = opus_decoder(sample_rate=self.sample_rate, channels=self.channels, packet_size=0)
+        input_data = np.array([0x78], dtype=np.uint8)
+        output_data = np.zeros(self.frame_size * 2, dtype=np.float32)
+        produced = decoder.work([input_data], [output_data])
+        self.assertGreaterEqual(produced, 0)
+
+    def test_015_decoder_interleaved_valid_invalid(self):
+        """Test decoder with valid packet followed by invalid data"""
+        encoded_packet = self._generate_encoded_packet(sample_rate=self.sample_rate, channels=self.channels)
+        packet_size = len(encoded_packet)
+        decoder = opus_decoder(sample_rate=self.sample_rate, channels=self.channels, packet_size=packet_size)
+
+        invalid_data = np.random.randint(0, 256, packet_size, dtype=np.uint8)
+        input_data = np.concatenate([
+            np.frombuffer(encoded_packet, dtype=np.uint8),
+            invalid_data
+        ])
+        output_data = np.zeros(self.frame_size * 4, dtype=np.float32)
+        produced = decoder.work([input_data], [output_data])
+        self.assertGreater(produced, 0)
+
+    def test_016_decoder_12khz_sample_rate(self):
+        """Test decoder at 12 kHz sample rate"""
+        encoded_packet = self._generate_encoded_packet(sample_rate=12000, channels=1)
+        decoder = opus_decoder(sample_rate=12000, channels=1, packet_size=len(encoded_packet))
+        frame_size = int(12000 * 0.020)
+        input_data = np.frombuffer(encoded_packet, dtype=np.uint8)
+        output_data = np.zeros(frame_size * 2, dtype=np.float32)
+        produced = decoder.work([input_data], [output_data])
+        self.assertGreater(produced, 0)
+
+    def test_017_decoder_small_output_buffer(self):
+        """Test decoder with output buffer smaller than one frame"""
+        encoded_packet = self._generate_encoded_packet(sample_rate=self.sample_rate, channels=self.channels)
+        decoder = opus_decoder(sample_rate=self.sample_rate, channels=self.channels, packet_size=len(encoded_packet))
+        input_data = np.frombuffer(encoded_packet, dtype=np.uint8)
+        output_data = np.zeros(10, dtype=np.float32)
+        produced = decoder.work([input_data], [output_data])
+        self.assertIsInstance(produced, int)
 
 
 if __name__ == "__main__":

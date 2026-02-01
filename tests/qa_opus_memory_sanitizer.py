@@ -12,10 +12,15 @@ import unittest
 
 import numpy as np
 
-# Add parent directory to path to import gr_opus
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
-from opus_decoder import opus_decoder
-from opus_encoder import opus_encoder
+# Prefer gr_opus from gnuradio; fallback to local python
+try:
+    from gnuradio import gr_opus
+    opus_encoder = gr_opus.opus_encoder
+    opus_decoder = gr_opus.opus_decoder
+except ImportError:
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
+    from opus_decoder import opus_decoder
+    from opus_encoder import opus_encoder
 
 
 class qa_opus_memory_sanitizer(unittest.TestCase):
@@ -73,8 +78,10 @@ class qa_opus_memory_sanitizer(unittest.TestCase):
         tracemalloc.stop()
 
     def test_002_buffer_memory_bounds(self):
-        """Test buffer memory stays within bounds"""
+        """Test buffer memory stays within bounds (Python impl only)"""
         encoder = opus_encoder(sample_rate=self.sample_rate, channels=self.channels, bitrate=64000)
+        if not hasattr(encoder, "sample_buffer"):
+            self.skipTest("Buffer not exposed (C++ implementation)")
 
         # Send many partial frames to fill buffer
         partial_size = self.frame_size // 4
@@ -106,8 +113,10 @@ class qa_opus_memory_sanitizer(unittest.TestCase):
         )
 
     def test_003_decoder_buffer_memory_bounds(self):
-        """Test decoder buffer memory stays within bounds"""
+        """Test decoder buffer memory stays within bounds (Python impl only)"""
         decoder = opus_decoder(sample_rate=self.sample_rate, channels=self.channels, packet_size=0)
+        if not hasattr(decoder, "packet_buffer"):
+            self.skipTest("Buffer not exposed (C++ implementation)")
 
         # Generate encoded packet
         import opuslib
@@ -186,8 +195,10 @@ class qa_opus_memory_sanitizer(unittest.TestCase):
         tracemalloc.stop()
 
     def test_005_stability_100_percent(self):
-        """Test 100% stability - deterministic memory usage"""
+        """Test 100% stability - deterministic memory usage (Python impl only)"""
         encoder = opus_encoder(sample_rate=self.sample_rate, channels=self.channels, bitrate=64000)
+        if not hasattr(encoder, "sample_buffer"):
+            self.skipTest("Buffer not exposed (C++ implementation)")
 
         # Use fixed seed for deterministic input
         np.random.seed(42)

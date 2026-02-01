@@ -17,7 +17,8 @@ class opus_encoder(gr.sync_block):
     Output: Bytes containing Opus-encoded packets
     """
 
-    def __init__(self, sample_rate=48000, channels=1, bitrate=64000, application="audio"):
+    def __init__(self, sample_rate=48000, channels=1, bitrate=64000, application="audio",
+                 enable_fargan_voice=False, dnn_blob_path=""):
         """
         Initialize Opus encoder
 
@@ -26,6 +27,8 @@ class opus_encoder(gr.sync_block):
             channels: Number of channels (1 for mono, 2 for stereo)
             bitrate: Target bitrate in bits per second
             application: Opus application type ('voip', 'audio', or 'lowdelay')
+            enable_fargan_voice: Ignored in Python fallback (C++ DRED only)
+            dnn_blob_path: Ignored in Python fallback (C++ DRED only)
         """
         gr.sync_block.__init__(self, name="opus_encoder", in_sig=[np.float32], out_sig=[np.uint8])
 
