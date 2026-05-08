@@ -8,6 +8,8 @@ This code has not been reviewed by professional coders, it is a large task. If t
 
 GNU Radio Out-of-Tree (OOT) module for Opus audio codec support.
 
+**GNU Radio 4.0:** A header-only C++ port (Boost.UT tests, `gnuradio4::gr-opus`) lives on branch [`gnuradio4`](https://github.com/Supermagnum/gr-opus/tree/gnuradio4) in [`gnuradio4/`](https://github.com/Supermagnum/gr-opus/tree/gnuradio4/gnuradio4). See [gnuradio4/README.md](gnuradio4/README.md).
+
 ## Description
 
 gr-opus provides GNU Radio blocks for encoding and decoding Opus audio. The module uses Python blocks that interface with the Opus library through Python bindings.
@@ -124,7 +126,21 @@ The decoder automatically detects and decodes FARGAN/DRED when present in receiv
 
 ## FARGAN Voice Encoder for Amateur Radio
 
-If Opus is built from source with `--enable-dred --enable-osce`, the FARGAN voice encoder is available. It supports voice at 1.6 kbps. Opus source: <https://github.com/xiph/opus>
+If Opus is built from source with `--enable-dred --enable-osce`, the FARGAN voice encoder is available. It supports voice at 1.6 kbps.
+
+**To get DRED/OSCE (FARGAN) support**, build Opus from source with those flags:
+
+```bash
+git clone https://github.com/xiph/opus.git
+cd opus
+./autogen.sh
+./configure --enable-dred --enable-osce
+make
+sudo make install
+sudo ldconfig
+```
+
+Then build and install gr-opus as usual. gr-opus detects DRED/OSCE in the installed Opus headers and enables support automatically.
 
 ### FARGAN vs Codec2
 
