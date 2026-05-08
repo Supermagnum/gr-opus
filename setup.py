@@ -10,7 +10,7 @@ setup(
     version="1.0.0",
     description="GNU Radio Out-of-Tree module for Opus audio codec",
     author="gr-opus developers",
-    url="https://github.com/yourusername/gr-opus",
+    url="https://github.com/Supermagnum/gr-opus/tree/main",
     license="GPLv3",
     packages=find_packages(),
     install_requires=[
