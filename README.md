@@ -10,7 +10,7 @@ GNU Radio Out-of-Tree (OOT) module for Opus audio codec support.
 
 **GNU Radio 3.x (classic OOT):** [default `main` branch](https://github.com/Supermagnum/gr-opus/tree/main).
 
-**GNU Radio 4.0:** A header-only C++ port (Boost.UT tests, `gnuradio4::gr-opus`) lives on branch [`gnuradio4`](https://github.com/Supermagnum/gr-opus/tree/gnuradio4) in [`gnuradio4/`](https://github.com/Supermagnum/gr-opus/tree/gnuradio4/gnuradio4). See [gnuradio4/README.md](gnuradio4/README.md).
+**GNU Radio 4.0:** A header-only C++ port (Boost.UT tests, `gnuradio4::gr-opus`) lives on branch [`gnuradio4`](https://github.com/Supermagnum/gr-opus/tree/gnuradio4) under [`gnuradio4/`](https://github.com/Supermagnum/gr-opus/tree/gnuradio4/gnuradio4). See [`gnuradio4/README.md` on GitHub](https://github.com/Supermagnum/gr-opus/blob/gnuradio4/gnuradio4/README.md).
 
 ## Description
 
