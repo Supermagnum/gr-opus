@@ -56,8 +56,12 @@ At comparable bitrates (e.g., 6-8 kbps), Opus provides noticeably better audio q
 - numpy
 - opuslib (Python bindings for Opus)
 
-Install Python dependencies:
+Install Python dependencies (use a venv; do not install into system Python):
+
 ```bash
+cd /path/to/gr-opus
+python3 -m venv .venv
+source .venv/bin/activate
 pip install numpy opuslib
 ```
 
